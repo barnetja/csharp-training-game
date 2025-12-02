@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
 export default function Game() {
@@ -136,6 +136,44 @@ export default function Game() {
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [answered, setAnswered] = useState(false);
   const [gameOver, setGameOver] = useState(false);
+  const [showGlossary, setShowGlossary] = useState(false);
+  const [glossarySearch, setGlossarySearch] = useState('');
+
+  const initialGlossary = [
+    { term: 'class', definition: "A blueprint for objects; defines properties and methods.", examples: [], link: '' },
+    { term: 'struct', definition: "A value type used for small data structures; stored on the stack.", examples: [], link: '' },
+    { term: 'interface', definition: "Defines a contract of members that implementing types must provide.", examples: [], link: '' },
+    { term: 'delegate', definition: "A type-safe function pointer; used for callbacks and events.", examples: [], link: '' },
+    { term: 'LINQ', definition: "Language Integrated Query: query syntax for collections and data sources.", examples: [], link: '' },
+    { term: 'async/await', definition: "Keywords for asynchronous programming; 'async' marks a method and 'await' pauses until a task completes.", examples: [], link: '' },
+    { term: 'Task', definition: "Represents an asynchronous operation, higher-level abstraction than Thread.", examples: [], link: '' },
+    { term: 'null-coalescing (??)', definition: "Operator that returns left operand if not null, otherwise the right operand.", examples: [], link: '' },
+    { term: 'generics', definition: "Type parameters that allow classes and methods to operate on different types while providing type safety.", examples: [], link: '' },
+    { term: 'reflection', definition: "Inspect and manipulate types and metadata at runtime.", examples: [], link: '' },
+    { term: 'covariance/contravariance', definition: "Generics features that control how types relate in inheritance positions (out/in).", examples: [], link: '' },
+    { term: 'expression-bodied member', definition: "Concise syntax using '=>' for simple methods/properties.", examples: [], link: '' },
+    { term: 'namespace', definition: "A container for classes and other types that helps avoid naming collisions.", examples: [], link: '' },
+    { term: 'property', definition: "A member that provides a flexible mechanism to read, write, or compute the value of a private field.", examples: [], link: '' },
+    { term: 'indexer', definition: "Allows instances of a class or struct to be indexed like arrays.", examples: [], link: '' }
+  ];
+
+  const [glossary, setGlossary] = useState(() => {
+    try {
+      const raw = localStorage.getItem('csharp_glossary');
+      return raw ? JSON.parse(raw) : initialGlossary;
+    } catch (e) {
+      return initialGlossary;
+    }
+  });
+
+  // Persist glossary to localStorage on changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('csharp_glossary', JSON.stringify(glossary));
+    } catch (e) {
+      // ignore storage errors
+    }
+  }, [glossary]);
 
   const startGame = () => {
     const filtered = allQuestions.filter(q => q.difficulty === difficulty);
@@ -175,6 +213,60 @@ export default function Game() {
     setSelectedAnswer(null);
     setAnswered(false);
     setGameOver(false);
+  };
+
+  const filteredGlossary = glossary.filter(g =>
+    g.term.toLowerCase().includes(glossarySearch.toLowerCase()) ||
+    g.definition.toLowerCase().includes(glossarySearch.toLowerCase())
+  );
+
+  // Glossary management helpers
+  const addTerm = ({ term, definition, link }) => {
+    if (!term || !definition) return;
+    setGlossary(prev => [{ term, definition, examples: [], link: link || '' }, ...prev]);
+    setGlossarySearch('');
+  };
+
+  const addExampleToTerm = (index, example) => {
+    if (!example) return;
+    setGlossary(prev => prev.map((t, i) => i === index ? { ...t, examples: [...t.examples, example] } : t));
+  };
+
+  const deleteTerm = (index) => {
+    setGlossary(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const exportGlossary = () => {
+    const data = JSON.stringify(glossary, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'glossary.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importGlossaryFile = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (!Array.isArray(parsed)) return;
+        // merge without duplicates (by term)
+        setGlossary(prev => {
+          const map = new Map(prev.map(p => [p.term.toLowerCase(), p]));
+          parsed.forEach(p => {
+            if (p.term) map.set(p.term.toLowerCase(), { term: p.term, definition: p.definition || '', examples: p.examples || [], link: p.link || '' });
+          });
+          return Array.from(map.values()).reverse();
+        });
+      } catch (e) {
+        // ignore parse errors
+      }
+    };
+    reader.readAsText(file);
   };
 
   if (!gameStarted) {
@@ -217,7 +309,8 @@ export default function Game() {
             </div>
           </div>
 
-          <motion.button
+          <div className="mb-4">
+            <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={startGame}
@@ -225,9 +318,31 @@ export default function Game() {
           >
             Start Game
           </motion.button>
+          </div>
+
+          <div className="mb-2">
+            <button
+              onClick={() => setShowGlossary(true)}
+              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg transition"
+            >
+              View Glossary of C# Terms
+            </button>
+          </div>
         </motion.div>
-      </motion.div>
-    );
+          <GlossaryModal
+            open={showGlossary}
+            onClose={() => setShowGlossary(false)}
+            items={filteredGlossary}
+            search={glossarySearch}
+            setSearch={setGlossarySearch}
+            addTerm={addTerm}
+            exportGlossary={exportGlossary}
+            importGlossaryFile={importGlossaryFile}
+            addExampleToTerm={addExampleToTerm}
+            deleteTerm={deleteTerm}
+          />
+        </motion.div>
+      );
   }
 
   if (gameOver) {
@@ -300,7 +415,15 @@ export default function Game() {
           <span className={`px-4 py-2 rounded-full text-sm font-semibold capitalize ${difficultyColor[difficulty]}`}>
             {difficulty}
           </span>
-          <span className="font-semibold text-gray-600">Score: {score}</span>
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-gray-600">Score: {score}</span>
+            <button
+              onClick={() => setShowGlossary(true)}
+              className="text-sm text-gray-600 hover:text-gray-800 px-3 py-1 rounded"
+            >
+              Glossary
+            </button>
+          </div>
         </div>
 
         {/* Progress Bar */}
@@ -385,3 +508,93 @@ export default function Game() {
     </motion.div>
   );
 }
+
+// Small inline glossary modal component
+function GlossaryModal({ open, onClose, items, search, setSearch, addTerm, exportGlossary, importGlossaryFile, addExampleToTerm, deleteTerm }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full mx-4 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold">C# Terms & Definitions</h3>
+          <button onClick={onClose} className="text-gray-600 hover:text-gray-800">Close</button>
+        </div>
+        <div className="mb-4 flex gap-3">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search terms or definitions..."
+            className="flex-1 border rounded px-3 py-2"
+          />
+          <button onClick={exportGlossary} className="px-3 py-2 bg-gray-100 rounded">Export</button>
+          <label className="px-3 py-2 bg-gray-100 rounded cursor-pointer">
+            Import
+            <input type="file" accept="application/json" className="hidden" onChange={(e)=> importGlossaryFile(e.target.files && e.target.files[0])} />
+          </label>
+        </div>
+
+        {/* Add term form */}
+        <AddTermForm onAdd={(t) => addTerm(t)} />
+        <div className="space-y-3 max-h-80 overflow-auto">
+          {items.length === 0 && <p className="text-gray-600">No terms found.</p>}
+                {items.map((g, i) => (
+                  <div key={i} className="p-3 border rounded">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-semibold text-gray-800">{g.term}</div>
+                        <div className="text-sm text-gray-700">{g.definition}</div>
+                        {g.link && (
+                          <div className="text-sm mt-1">
+                            <a href={g.link} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">Docs</a>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <button onClick={() => deleteTerm(i)} className="text-sm text-red-600">Delete</button>
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <div className="text-sm font-semibold">Examples</div>
+                      {g.examples && g.examples.length === 0 && <div className="text-sm text-gray-500">No examples yet.</div>}
+                      {g.examples && g.examples.map((ex, idx) => (
+                        <div key={idx} className="text-sm text-gray-700">• {ex}</div>
+                      ))}
+                      <AddExampleForm onAdd={(example) => addExampleToTerm(i, example)} />
+                    </div>
+                  </div>
+                ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+      // Small helper form to add a term
+      function AddTermForm({ onAdd }) {
+        const [term, setTerm] = useState('');
+        const [definition, setDefinition] = useState('');
+        const [link, setLink] = useState('');
+        return (
+          <div className="mb-4 p-3 border rounded">
+            <div className="text-sm font-semibold mb-2">Add Term</div>
+            <input value={term} onChange={e=>setTerm(e.target.value)} placeholder="Term" className="w-full border rounded px-2 py-1 mb-2" />
+            <input value={definition} onChange={e=>setDefinition(e.target.value)} placeholder="Definition" className="w-full border rounded px-2 py-1 mb-2" />
+            <input value={link} onChange={e=>setLink(e.target.value)} placeholder="Optional link (https://...)" className="w-full border rounded px-2 py-1 mb-2" />
+            <div className="flex gap-2">
+              <button onClick={() => { onAdd({ term: term.trim(), definition: definition.trim(), link: link.trim() }); setTerm(''); setDefinition(''); setLink(''); }} className="px-3 py-1 bg-blue-600 text-white rounded">Add</button>
+            </div>
+          </div>
+        );
+      }
+
+      // Small helper form to add an example to a term
+      function AddExampleForm({ onAdd }) {
+        const [example, setExample] = useState('');
+        return (
+          <div className="mt-2 flex gap-2">
+            <input value={example} onChange={e=>setExample(e.target.value)} placeholder="Add example (one-liner)" className="flex-1 border rounded px-2 py-1" />
+            <button onClick={() => { onAdd(example.trim()); setExample(''); }} className="px-3 py-1 bg-gray-100 rounded">Add</button>
+          </div>
+        );
+      }
+
