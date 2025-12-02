@@ -1,0 +1,31 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "firefox",
+            "request": "launch",
+            "name": "Launch Firefox against Vite (localhost:5174)",
+            "url": "http://localhost:5174",
+            "webRoot": "${workspaceFolder}",
+            "preLaunchTask": "npm: dev",
+            "pathMapping": {
+                "/": "${workspaceFolder}/",
+                "http://localhost:5174": "${workspaceFolder}/"
+            }
+        },
+        {
+            "type": "firefox",
+            "request": "attach",
+            "name": "Attach Firefox (for manual start)",
+            "url": "http://localhost:5174",
+            "webRoot": "${workspaceFolder}",
+            "pathMapping": {
+                "/": "${workspaceFolder}/",
+                "http://localhost:5174": "${workspaceFolder}/"
+            }
+        }
+    ]
+}

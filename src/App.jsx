@@ -1,1 +1,5 @@
-export default function App(){ return (<div className='p-6'><h1 className='text-3xl'>Insert Game Component</h1></div>);}
+import Game from './components/Game';
+
+export default function App() {
+  return <Game />;
+}
