@@ -269,6 +269,87 @@ export default function Game() {
     reader.readAsText(file);
   };
 
+  // CSV export/import helpers
+  const exportCSV = () => {
+    const rows = [['term', 'definition', 'link', 'examples']];
+    glossary.forEach(g => {
+      const examples = (g.examples || []).map(e => e.replace(/"/g, '""')).join('|');
+      const row = [g.term, g.definition, g.link || '', examples];
+      rows.push(row.map(field => `"${(field || '').replace(/"/g, '""')}"`));
+    });
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'glossary.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const parseCSV = (text) => {
+    // Simple CSV parser supporting quoted fields and commas inside quotes
+    const lines = [];
+    let cur = '';
+    let inQuotes = false;
+    const rows = [];
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const next = text[i+1];
+      if (ch === '"') {
+        if (inQuotes && next === '"') { cur += '"'; i++; continue; }
+        inQuotes = !inQuotes; continue;
+      }
+      if (ch === ',' && !inQuotes) { rows.push(cur); cur = ''; continue; }
+      if ((ch === '\n' || ch === '\r') && !inQuotes) {
+        if (cur !== '' || rows.length) { rows.push(cur); lines.push(rows.slice()); }
+        cur = ''; rows.length = 0; continue;
+      }
+      cur += ch;
+    }
+    if (cur !== '' || rows.length) { rows.push(cur); lines.push(rows.slice()); }
+    return lines.map(r => r.map(cell => cell.trim()));
+  };
+
+  const importCSVFile = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = reader.result;
+        const parsed = parseCSV(text);
+        if (!parsed || parsed.length === 0) return;
+        // first row header
+        const [header, ...data] = parsed;
+        const termIdx = header.findIndex(h => /term/i.test(h));
+        const defIdx = header.findIndex(h => /def/i.test(h));
+        const linkIdx = header.findIndex(h => /link/i.test(h));
+        const exIdx = header.findIndex(h => /example/i.test(h));
+        const imported = data.map(row => {
+          const term = (row[termIdx] || '').replace(/^"|"$/g, '').trim();
+          const definition = (row[defIdx] || '').replace(/^"|"$/g, '').trim();
+          const link = (row[linkIdx] || '').replace(/^"|"$/g, '').trim();
+          const examplesRaw = (row[exIdx] || '').replace(/^"|"$/g, '').trim();
+          const examples = examplesRaw ? examplesRaw.split('|').map(s => s.replace(/""/g, '"')) : [];
+          return { term, definition, examples, link };
+        }).filter(i => i.term);
+        setGlossary(prev => {
+          const map = new Map(prev.map(p => [p.term.toLowerCase(), p]));
+          imported.forEach(p => map.set(p.term.toLowerCase(), p));
+          return Array.from(map.values()).reverse();
+        });
+      } catch (e) {
+        // ignore
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const resetGlossary = () => {
+    setGlossary(initialGlossary);
+    try { localStorage.removeItem('csharp_glossary'); } catch (e) {}
+  };
+
   if (!gameStarted) {
     return (
       <motion.div
@@ -519,18 +600,24 @@ function GlossaryModal({ open, onClose, items, search, setSearch, addTerm, expor
           <h3 className="text-xl font-bold">C# Terms & Definitions</h3>
           <button onClick={onClose} className="text-gray-600 hover:text-gray-800">Close</button>
         </div>
-        <div className="mb-4 flex gap-3">
+          <div className="mb-4 flex gap-3">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search terms or definitions..."
             className="flex-1 border rounded px-3 py-2"
           />
-          <button onClick={exportGlossary} className="px-3 py-2 bg-gray-100 rounded">Export</button>
+          <button onClick={exportGlossary} className="px-3 py-2 bg-gray-100 rounded">Export JSON</button>
+          <button onClick={exportCSV} className="px-3 py-2 bg-gray-100 rounded">Export CSV</button>
           <label className="px-3 py-2 bg-gray-100 rounded cursor-pointer">
-            Import
+            Import JSON
             <input type="file" accept="application/json" className="hidden" onChange={(e)=> importGlossaryFile(e.target.files && e.target.files[0])} />
           </label>
+          <label className="px-3 py-2 bg-gray-100 rounded cursor-pointer">
+            Import CSV
+            <input type="file" accept="text/csv,application/csv" className="hidden" onChange={(e)=> importCSVFile(e.target.files && e.target.files[0])} />
+          </label>
+          <button onClick={resetGlossary} className="px-3 py-2 bg-red-100 text-red-700 rounded">Reset</button>
         </div>
 
         {/* Add term form */}
