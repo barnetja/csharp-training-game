@@ -1,6 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
+const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'http://localhost:4000';
+
+// Server API helpers
+async function fetchGlossaryFromServer() {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/glossary`);
+    if (!res.ok) throw new Error('Failed to fetch glossary');
+    return await res.json();
+  } catch (e) {
+    console.warn('Could not fetch glossary from server:', e.message);
+    return null;
+  }
+}
+
+async function syncGlossaryToServer(glossary) {
+  try {
+    const res = await fetch(`${SERVER_URL}/api/glossary`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(glossary)
+    });
+    if (!res.ok) throw new Error('Failed to sync glossary');
+    return await res.json();
+  } catch (e) {
+    console.warn('Could not sync glossary to server:', e.message);
+  }
+}
+
 export default function Game() {
   const allQuestions = [
     // Beginner
@@ -166,13 +194,30 @@ export default function Game() {
     }
   });
 
-  // Persist glossary to localStorage on changes
+  // Load glossary from server on mount
+  useEffect(() => {
+    (async () => {
+      const serverGlossary = await fetchGlossaryFromServer();
+      if (serverGlossary && Array.isArray(serverGlossary) && serverGlossary.length > 0) {
+        setGlossary(serverGlossary);
+        try {
+          localStorage.setItem('csharp_glossary', JSON.stringify(serverGlossary));
+        } catch (e) {
+          // ignore storage errors
+        }
+      }
+    })();
+  }, []);
+
+  // Persist glossary to localStorage AND server on changes
   useEffect(() => {
     try {
       localStorage.setItem('csharp_glossary', JSON.stringify(glossary));
     } catch (e) {
       // ignore storage errors
     }
+    // sync to server (fire and forget)
+    syncGlossaryToServer(glossary);
   }, [glossary]);
 
   const startGame = () => {
@@ -418,9 +463,12 @@ export default function Game() {
             setSearch={setGlossarySearch}
             addTerm={addTerm}
             exportGlossary={exportGlossary}
+            exportCSV={exportCSV}
             importGlossaryFile={importGlossaryFile}
+            importCSVFile={importCSVFile}
             addExampleToTerm={addExampleToTerm}
             deleteTerm={deleteTerm}
+            resetGlossary={resetGlossary}
           />
         </motion.div>
       );
@@ -591,7 +639,8 @@ export default function Game() {
 }
 
 // Small inline glossary modal component
-function GlossaryModal({ open, onClose, items, search, setSearch, addTerm, exportGlossary, importGlossaryFile, addExampleToTerm, deleteTerm }) {
+function GlossaryModal({ open, onClose, items, search, setSearch, addTerm, exportGlossary, exportCSV, importGlossaryFile, importCSVFile, addExampleToTerm, deleteTerm, resetGlossary }) {
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   if (!open) return null;
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -617,7 +666,14 @@ function GlossaryModal({ open, onClose, items, search, setSearch, addTerm, expor
             Import CSV
             <input type="file" accept="text/csv,application/csv" className="hidden" onChange={(e)=> importCSVFile(e.target.files && e.target.files[0])} />
           </label>
-          <button onClick={resetGlossary} className="px-3 py-2 bg-red-100 text-red-700 rounded">Reset</button>
+          {!showResetConfirm ? (
+            <button onClick={() => setShowResetConfirm(true)} className="px-3 py-2 bg-red-100 text-red-700 rounded">Reset</button>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => { resetGlossary(); setShowResetConfirm(false); onClose(); }} className="px-3 py-2 bg-red-600 text-white rounded">Yes, reset</button>
+              <button onClick={() => setShowResetConfirm(false)} className="px-3 py-2 bg-gray-100 rounded">Cancel</button>
+            </div>
+          )}
         </div>
 
         {/* Add term form */}
