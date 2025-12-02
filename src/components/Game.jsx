@@ -643,8 +643,8 @@ function GlossaryModal({ open, onClose, items, search, setSearch, addTerm, expor
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full mx-4 p-6">
+    <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 pt-4 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-2xl max-w-3xl w-full mx-4 p-6 my-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-bold">C# Terms & Definitions</h3>
           <button onClick={onClose} className="text-gray-600 hover:text-gray-800">Close</button>
